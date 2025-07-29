@@ -1,0 +1,84 @@
+CHANGES TO IMPLEMENT:
+
+1. Add to DomainTab.php (after the AI Model section):
+```php
+            <!-- Similarity Threshold -->
+            <tr>
+                <th scope="row">
+                    <label for="aica_similarity_threshold">Similarity Threshold</label>
+                    <span class="dashicons dashicons-editor-help"
+                          title="Controls how different new content must be from existing posts (higher = more unique). Increase to prevent duplicate content, decrease to allow more similar posts."
+                          style="vertical-align:middle;"></span>
+                </th>
+                <td>
+                    <input type="range" id="aica_similarity_threshold" name="aica_settings[similarity_threshold]"
+                           min="70" max="95" step="5" 
+                           value="<?= esc_attr($o['similarity_threshold'] ?? 85) ?>"
+                           oninput="document.getElementById('threshold_value').textContent = this.value + '%'">
+                    <span id="threshold_value"><?= esc_html(($o['similarity_threshold'] ?? 85) . '%') ?></span>
+                </td>
+            </tr>
+```
+
+2. Add to DomainTab.php handleSave method:
+```php
+$settings['similarity_threshold'] = min(95, max(70, intval($_POST['aica_settings']['similarity_threshold'] ?? 85)));
+```
+
+3. Update EmbeddingService.php isUnique method:
+```php
+public static function isUnique(int $pillarId, array $newEmb, ?float $threshold = null): bool
+{
+    // Get threshold from settings or use default 0.85
+    if ($threshold === null) {
+        $settings = get_option('aica_settings', []);
+        $threshold = isset($settings['similarity_threshold']) 
+            ? (float)($settings['similarity_threshold'] / 100) 
+            : 0.85;
+    }
+    
+    $posts = get_posts([
+        'post_type'      => 'post',
+        'post_parent'    => $pillarId,
+        'meta_key'       => '_aica_embedding',
+        'posts_per_page' => -1,
+        'fields'         => 'ids',
+    ]);
+    foreach ($posts as $pid) {
+        $old = (array) get_post_meta($pid, '_aica_embedding', true);
+        if ($old && self::cosineSimilarity($newEmb, $old) > $threshold) {
+            return false;
+        }
+    }
+    return true;
+}
+```
+
+4. Add to Planner.php:
+```php
+/**
+ * Get the similarity threshold used by EmbeddingService
+ */
+private function getSimilarityThreshold(): int
+{
+    $settings = get_option('aica_settings', []);
+    // Return the configured threshold or default to 85%
+    return isset($settings['similarity_threshold']) 
+        ? (int)$settings['similarity_threshold'] 
+        : 85;
+}
+```
+
+5. Update Planner.php analysePillar method to include the threshold:
+```php
+return [
+    'primary_kw'   => $s->kw_primary,
+    'secondary_kw' => $s->kw_secondary,
+    'h2_topics'    => $angle ?: 'Key benefits, How it works, FAQ',
+    'angle'        => $angle ?? '',
+    'page_summary' => $summary,
+    'similarity_threshold' => $this->getSimilarityThreshold(),
+];
+```
+
+6. Standardize help icons in StrategySingleTab.php

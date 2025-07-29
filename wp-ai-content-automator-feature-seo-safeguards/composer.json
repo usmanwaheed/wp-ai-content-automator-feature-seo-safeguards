@@ -1,0 +1,15 @@
+{
+  "name": "yourname/wp-ai-content-automator",
+  "type": "wordpress-plugin",
+  "autoload": { "psr-4": { "AICA\\": "src/" } },
+  "require": {
+    "guzzlehttp/guzzle": "^7.7",
+    "vlucas/phpdotenv": "^5.6",
+    "woocommerce/action-scheduler": "3.7",
+    "opis/json-schema": "^2.4"
+  },
+  "scripts": {
+    "lint": "php -l $(git ls-files '*.php')",
+    "phpcs": "phpcs --standard=.phpcs.xml"
+  }
+}

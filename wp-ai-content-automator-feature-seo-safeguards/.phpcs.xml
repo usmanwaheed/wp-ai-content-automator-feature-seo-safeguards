@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<ruleset name="AICA">
+    <rule ref="PSR12"/>
+</ruleset>
