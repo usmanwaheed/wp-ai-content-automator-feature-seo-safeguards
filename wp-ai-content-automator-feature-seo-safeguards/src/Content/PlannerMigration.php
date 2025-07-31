@@ -1,5 +1,8 @@
 <?php
+declare(strict_types=1);
+
 // File: src/Content/PlannerMigration.php
+
 namespace AICA\Content;
 
 /**
@@ -12,25 +15,25 @@ class PlannerMigration
 {
     public static function migrate(): void
     {
-        // Load existing strategies or empty array
-        $all = get_option('aica_strategies', []);
+        $strategies = get_option('aica_strategies', []);
         $changed = false;
 
-        // Legacy migration if no existing strategies
-        $old = get_option('aica_settings', []);
-        if (empty($all) && !empty($old['source_url'])) {
-            $legacy = [
-                'source_url'      => $old['source_url'],
-                'kw_primary'      => $old['kw_primary']   ?? '',
-                'kw_secondary'    => $old['kw_secondary'] ?? '',
-                'tone'            => $old['tone']         ?? 'professional',
-                'min_words'       => $old['min_words']    ?? 600,
-                'max_words'       => $old['max_words']    ?? 1200,
-                'recurrence'      => $old['recurrence']   ?? 'daily',
-                'weekdays'        => $old['weekdays']     ?? [],
-                'publish_time'    => $old['publish_time'] ?? '09:00',
-                'category_id'     => $old['category_id']  ?? get_option('default_category'),
-                // new default fields
+        // Legacy settings from old version
+        $legacySettings = get_option('aica_settings', []);
+
+        if (empty($strategies) && !empty($legacySettings['source_url'])) {
+            $strategies[] = [
+                'source_url'      => $legacySettings['source_url'],
+                'kw_primary'      => $legacySettings['kw_primary']   ?? '',
+                'kw_secondary'    => $legacySettings['kw_secondary'] ?? '',
+                'tone'            => $legacySettings['tone']         ?? 'professional',
+                'min_words'       => $legacySettings['min_words']    ?? 600,
+                'max_words'       => $legacySettings['max_words']    ?? 1200,
+                'recurrence'      => $legacySettings['recurrence']   ?? 'daily',
+                'weekdays'        => $legacySettings['weekdays']     ?? [],
+                'publish_time'    => $legacySettings['publish_time'] ?? '09:00',
+                'category_id'     => $legacySettings['category_id']  ?? (int) get_option('default_category'),
+                // New default fields
                 'interval_days'   => 0,
                 'start_date'      => '',
                 'month_day'       => 1,
@@ -41,34 +44,42 @@ class PlannerMigration
                 'image_count'     => 3,
             ];
 
-            $all = [$legacy];
             $changed = true;
-            update_option('aica_strategies', $all, false);
             error_log('[AICA] Legacy strategy migrated to aica_strategies.');
         }
 
-        // Defaults migration for any existing strategies
-        foreach ($all as $i => $s) {
-            foreach ([
-                'interval_days'  => 0,
-                'start_date'     => '',
-                'weekdays'       => [],
-                'month_day'      => 1,
-                'stop_condition' => 'none',
-                'max_posts'      => 0,
-                'end_date'       => '',
-                'enable_images'  => 0,
-                'image_count'    => 3,
-            ] as $field => $default) {
-                if (! isset($s[$field])) {
-                    $all[$i][$field] = $default;
+        // Ensure all strategies have required new default fields
+        foreach ($strategies as $i => $strategy) {
+            foreach (self::getDefaultFields() as $field => $default) {
+                if (!array_key_exists($field, $strategy)) {
+                    $strategies[$i][$field] = $default;
                     $changed = true;
                 }
             }
         }
 
         if ($changed) {
-            update_option('aica_strategies', $all, false);
+            update_option('aica_strategies', $strategies, false);
         }
+    }
+
+    /**
+     * Returns an array of default strategy fields.
+     *
+     * @return array<string, mixed>
+     */
+    private static function getDefaultFields(): array
+    {
+        return [
+            'interval_days'   => 0,
+            'start_date'      => '',
+            'weekdays'        => [],
+            'month_day'       => 1,
+            'stop_condition'  => 'none',
+            'max_posts'       => 0,
+            'end_date'        => '',
+            'enable_images'   => 0,
+            'image_count'     => 3,
+        ];
     }
 }

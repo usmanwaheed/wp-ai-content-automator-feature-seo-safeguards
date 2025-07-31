@@ -33,12 +33,12 @@ PROMPT;
                     'Authorization' => 'Bearer ' . $this->getApiKey(),
                     'Content-Type'  => 'application/json',
                 ],
-                'timeout'  => 20,
+                'timeout'  => 3000,
             ]);
 
             $res = $client->post('chat/completions', [
                 'json' => [
-                    'model'    => 'gpt-3.5-turbo-0125',
+                    'model'    => 'gpt-4.1-mini',
                     'messages' => [
                         ['role' => 'user', 'content' => $prompt],
                     ],

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 namespace AICA\Utils;
 
 class ImageGenerator
@@ -11,11 +13,11 @@ class ImageGenerator
     {
         $this->costCap = $costCap;
         $settings = get_option('aica_settings', []);
-        $this->apiKey = $settings['openai_key'] ?? '';
+        $this->apiKey = isset($settings['openai_key']) ? (string) $settings['openai_key'] : '';
     }
 
     /**
-     * Generate an image using DALL-E 3
+     * Generate an image using DALL-E 3, with up to 3 retries
      */
     public function generate(string $prompt): ?string
     {
@@ -23,40 +25,49 @@ class ImageGenerator
             return null;
         }
 
-        $response = wp_remote_post('https://api.openai.com/v1/images/generations', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $this->apiKey,
-                'Content-Type'  => 'application/json',
-            ],
-            'body' => wp_json_encode([
-                'prompt' => $prompt,
-                'model'  => 'dall-e-3',
-                'n'      => 1,
-                'size'   => '1024x1024',
-            ]),
-            'timeout' => 60,
-        ]);
+        $attempts = 0;
+        $maxRetries = 3;
 
-        if (is_wp_error($response)) {
-            error_log('[AICA] Image generation error: ' . $response->get_error_message());
-            return null;
-        }
+        while ($attempts < $maxRetries) {
+            $attempts++;
 
-        $responseCode = wp_remote_retrieve_response_code($response);
-        if ($responseCode !== 200) {
-            error_log('[AICA] Image API returned status: ' . $responseCode);
-            return null;
-        }
+            $response = wp_remote_post('https://api.openai.com/v1/images/generations', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Content-Type'  => 'application/json',
+                ],
+                'body' => wp_json_encode([
+                    'prompt' => $prompt,
+                    'model'  => 'dall-e-3',
+                    'n'      => 1,
+                    'size'   => '1024x1024',
+                ]),
+                'timeout' => 60,
+            ]);
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        $imageUrl = $body['data'][0]['url'] ?? null;
+            if (is_wp_error($response)) {
+                error_log("[AICA] Image generation error (Attempt $attempts): " . $response->get_error_message());
+                continue;
+            }
 
-        if ($imageUrl) {
-            // Track cost (approximate $0.08 per DALL-E 3 image)
+            $responseCode = wp_remote_retrieve_response_code($response);
+            if ($responseCode !== 200) {
+                error_log("[AICA] Image API returned status $responseCode (Attempt $attempts)");
+                continue;
+            }
+
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            if (!is_array($body) || empty($body['data'][0]['url'])) {
+                error_log("[AICA] Unexpected response structure during image generation (Attempt $attempts)");
+                continue;
+            }
+
+            // Success
             $this->spent += 0.08;
+            return $body['data'][0]['url'];
         }
 
-        return $imageUrl;
+        return null;
     }
 
     /**

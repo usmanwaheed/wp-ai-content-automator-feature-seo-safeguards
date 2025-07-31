@@ -9,21 +9,19 @@ class ContentHelper
     public static function extractHeadings(string $html): string
     {
         $headings = [];
-        
-        // Extract H1 tags
-        if (preg_match_all('/<h1[^>]*>(.*?)<\/h1>/i', $html, $matches)) {
-            foreach ($matches[1] as $heading) {
-                $headings[] = wp_strip_all_tags($heading);
+
+        // Combine H1 and H2 extraction in a single loop for clarity
+        foreach (['h1', 'h2'] as $tag) {
+            if (preg_match_all('/<' . $tag . '[^>]*>(.*?)<\/' . $tag . '>/i', $html, $matches)) {
+                foreach ($matches[1] as $heading) {
+                    $clean = wp_strip_all_tags($heading);
+                    if (!empty($clean)) {
+                        $headings[] = $clean;
+                    }
+                }
             }
         }
-        
-        // Extract H2 tags
-        if (preg_match_all('/<h2[^>]*>(.*?)<\/h2>/i', $html, $matches)) {
-            foreach ($matches[1] as $heading) {
-                $headings[] = wp_strip_all_tags($heading);
-            }
-        }
-        
+
         return implode(' ', $headings);
     }
 }

@@ -4,7 +4,7 @@
  * Description: Schedule & publish AI-generated, SEO-optimised blog posts.
  * Version: 0.3.0
  * Requires PHP: 8.1
- * Author: Roman
+ * Author: Roman se
  */
 
 declare(strict_types=1);

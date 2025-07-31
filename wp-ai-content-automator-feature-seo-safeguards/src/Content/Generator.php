@@ -19,7 +19,7 @@ final class Generator
                 'Authorization' => 'Bearer ' . $this->getApiKey(),
                 'Content-Type'  => 'application/json',
             ],
-            'timeout'  => 30,
+            'timeout'  => 60,
         ]);
     }
 
@@ -63,20 +63,18 @@ final class Generator
         }
     }
 
-    /*──────────  PRIVATE  ──────────*/
+    /*────────  PRIVATE  ────────*/
     private function callOpenAI(array $analysis, array $settings): string
     {
-        // Circuit breaker for API abuse
         if (self::$failCount > 3) {
             throw new \RuntimeException('OpenAI breaker - too many failures');
         }
-        
+
         $prompt = $this->buildPrompt($analysis, $settings);
 
-        // Fallback to a known-good OpenAI model if user selected a non-OpenAI one
-        $model = $settings['model'] ?? 'gpt-4o-mini';
+        $model = $settings['model'] ?? 'gpt-4.1-mini';
         if (strpos($model, 'gpt-') !== 0) {
-            $model = 'gpt-4o-mini';
+            $model = 'gpt-4.1-mini';
         }
 
         for ($retry = 0; $retry < self::MAX_RETRIES; $retry++) {
@@ -90,21 +88,19 @@ final class Generator
                         ],
                     ],
                 ]);
-                
-                // Reset fail count on success
+
                 self::$failCount = 0;
                 return $res->getBody()->getContents();
             } catch (RequestException $e) {
                 if ($e->getCode() === 429) {
-                    sleep(1 << $retry); // 1, 2, 4 …
+                    sleep(1 << $retry);
                     continue;
                 }
-                // Increment fail count on exception
                 ++self::$failCount;
                 throw $e;
             }
         }
-        
+
         ++self::$failCount;
         throw new \RuntimeException('Exceeded retry limit');
     }

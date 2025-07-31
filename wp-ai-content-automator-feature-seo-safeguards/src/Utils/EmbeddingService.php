@@ -1,9 +1,12 @@
 <?php
 // File: src/Utils/EmbeddingService.php
+declare(strict_types=1);
+
 namespace AICA\Utils;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
+use WP_Error;
 
 class EmbeddingService
 {
@@ -13,15 +16,22 @@ class EmbeddingService
     {
         if (self::$client === null) {
             $apiKey = self::getApiKey();
+
+            if (empty($apiKey)) {
+                error_log('[AICA] Missing OpenAI API Key.');
+                throw new \RuntimeException('OpenAI API Key not configured.');
+            }
+
             self::$client = new Client([
                 'base_uri' => 'https://api.openai.com/v1/',
                 'headers'  => [
                     'Authorization' => 'Bearer ' . $apiKey,
                     'Content-Type'  => 'application/json',
                 ],
-                'timeout'  => 30,
+                'timeout'  => 3000,
             ]);
         }
+
         return self::$client;
     }
 
@@ -31,15 +41,23 @@ class EmbeddingService
     public static function embedText(string $text): array
     {
         try {
-            $response = self::getClient()->post('embeddings', [
+            $client = self::getClient();
+            $response = $client->post('embeddings', [
                 'json' => [
                     'model' => 'text-embedding-ada-002',
                     'input' => $text,
                 ]
             ]);
-            
-            $data = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-            return $data['data'][0]['embedding'] ?? [];
+
+            $body = $response->getBody()->getContents();
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+
+            if (!isset($data['data'][0]['embedding'])) {
+                error_log('[AICA] Invalid embedding response: ' . $body);
+                return [];
+            }
+
+            return $data['data'][0]['embedding'];
         } catch (\Throwable $e) {
             error_log('[AICA] EmbeddingService error: ' . $e->getMessage());
             return [];
@@ -52,7 +70,7 @@ class EmbeddingService
     private static function getApiKey(): string
     {
         $opts = get_option(\AICA\Plugin::OPTION_KEY, []);
-        return $opts['openai_key'] ?? '';
+        return is_array($opts) && isset($opts['openai_key']) ? trim($opts['openai_key']) : '';
     }
 
     /**
@@ -60,14 +78,22 @@ class EmbeddingService
      */
     public static function cosineSimilarity(array $a, array $b): float
     {
-        $dot = 0.0; $na = 0.0; $nb = 0.0;
+        $dot = 0.0;
+        $na = 0.0;
+        $nb = 0.0;
+
         $len = min(count($a), count($b));
+
         for ($i = 0; $i < $len; $i++) {
             $dot += $a[$i] * $b[$i];
             $na  += $a[$i] ** 2;
             $nb  += $b[$i] ** 2;
         }
-        if ($na === 0.0 || $nb === 0.0) return 0.0;
+
+        if ($na === 0.0 || $nb === 0.0) {
+            return 0.0;
+        }
+
         return $dot / (sqrt($na) * sqrt($nb));
     }
 
@@ -84,7 +110,6 @@ class EmbeddingService
      */
     public static function isUnique(int $pillarId, array $newEmb, ?float $threshold = null): bool
     {
-        // Get threshold from settings or use default 0.85
         if ($threshold === null) {
             $settings = get_option('aica_settings', []);
             $threshold = isset($settings['similarity_threshold']) 
@@ -99,12 +124,14 @@ class EmbeddingService
             'posts_per_page' => -1,
             'fields'         => 'ids',
         ]);
+
         foreach ($posts as $pid) {
             $old = (array) get_post_meta($pid, '_aica_embedding', true);
-            if ($old && self::cosineSimilarity($newEmb, $old) > $threshold) {
+            if (!empty($old) && self::cosineSimilarity($newEmb, $old) > $threshold) {
                 return false;
             }
         }
+
         return true;
     }
 }

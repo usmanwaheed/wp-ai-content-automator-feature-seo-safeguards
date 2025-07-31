@@ -2,10 +2,11 @@
 namespace AICA\Content;
 
 use GuzzleHttp\Client;
+use RuntimeException;
 
 /**
  * Turns a free-text summary into structured domain tags.
- * 1. GPT-3.5-turbo: returns {"expertise":["algo trading",…],"audience":["retail traders",…]}
+ * 1. GPT-3.5-turbo: returns {"expertise":["algo trading",...],"audience":["retail traders",...]}
  * 2. Fallback: simple TF-IDF to guess top nouns.
  */
 final class DomainInsightsExtractor
@@ -27,26 +28,35 @@ PROMPT;
                     'Authorization' => 'Bearer ' . $this->getApiKey(),
                     'Content-Type'  => 'application/json',
                 ],
-                'timeout'  => 20,
+                'timeout'  => 3000,
             ]);
 
             $res = $client->post('chat/completions', [
                 'json' => [
-                    'model'    => 'gpt-3.5-turbo-0125',
+                    'model'    => 'gpt-4.1-mini',
                     'messages' => [['role'=>'user','content'=>$prompt]],
                     'max_tokens' => 120,
                 ],
             ]);
-            $data  = json_decode($res->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-            $json  = json_decode($data['choices'][0]['message']['content'] ?? '', true);
 
-            if (!empty($json['expertise']) && !empty($json['audience'])) {
+            $body = $res->getBody()->getContents();
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+
+            $jsonContent = $data['choices'][0]['message']['content'] ?? '';
+            $json = json_decode($jsonContent, true, 512, JSON_THROW_ON_ERROR);
+
+            if (
+                is_array($json)
+                && !empty($json['expertise'])
+                && !empty($json['audience'])
+            ) {
                 return [
                     'expertise' => $json['expertise'],
                     'audience'  => $json['audience'],
                 ];
             }
-            throw new \RuntimeException('GPT extraction failed');
+
+            throw new RuntimeException('GPT extraction failed');
         } catch (\Throwable $e) {
             return $this->fallback($summary);
         }
@@ -57,8 +67,9 @@ PROMPT;
     {
         $words = array_filter(
             preg_split('/[^a-z0-9]+/i', strtolower($txt)),
-            fn($w) => strlen($w) > 3
+            fn(string $w): bool => strlen($w) > 3
         );
+
         $freq = array_count_values($words);
         arsort($freq);
         $top = array_slice(array_keys($freq), 0, 9);
@@ -72,6 +83,8 @@ PROMPT;
     private function getApiKey(): string
     {
         $opts = get_option(\AICA\Plugin::OPTION_KEY, []);
-        return $opts['openai_key'] ?? '';
+        return is_array($opts) && isset($opts['openai_key'])
+            ? $opts['openai_key']
+            : '';
     }
 }

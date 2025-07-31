@@ -11,6 +11,7 @@ class DomainTab extends BaseTab
         'anthropic/claude-3-5-sonnet' => 'Claude 3.5 Sonnet (Anthropic)',
         'anthropic/claude-3-7-sonnet' => 'Claude 3.7 Sonnet (Anthropic)',
         'openai/gpt-4o'               => 'GPT-4o (OpenAI)',
+        'openai/gpt-4.1-mini' => 'GPT-4.1 (OpenAI)',
         'google/gemini-1.5-pro'       => 'Gemini 1.5 Pro (Google)',
         'anthropic/claude-opus-4'     => 'Claude Opus 4 (Anthropic)',
         'google/gemini-2.5-pro'       => 'Gemini 2.5 Pro (Google)',
@@ -55,9 +56,11 @@ class DomainTab extends BaseTab
                 <td>
                     <select name="aica_settings[model]" id="aica_model">
                         <?php
-                        $sel = $o['model'] ?? 'anthropic/claude-3-5-sonnet';
+                        $sel = $o['model'] ?? 'openai/gpt-4.1-mini'; // default selected value
                         foreach ($this->models as $val => $label) {
-                            echo "<option value='{$val}' " . selected($sel, $val, false) . ">{$label}</option>";
+                            $selected = selected($sel, $val, false);
+                            $disabled = $val !== 'openai/gpt-4.1-mini' ? 'disabled' : '';
+                            echo "<option value='{$val}' {$selected} {$disabled}>{$label}</option>";
                         }
                         ?>
                     </select>

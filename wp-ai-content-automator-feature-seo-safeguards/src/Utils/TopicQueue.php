@@ -45,7 +45,7 @@ class TopicQueue
                 'topics'      => wp_json_encode(array_values($topics)),
                 'used_topics' => wp_json_encode([]),
             ],
-            ['%d','%s','%s']
+            ['%d', '%s', '%s']
         );
     }
 
@@ -60,24 +60,43 @@ class TopicQueue
             $wpdb->prepare("SELECT topics, used_topics FROM " . self::$table . " WHERE strategy_id = %d", $strategyId),
             ARRAY_A
         );
-        if (!$row) return null;
 
-        $all  = json_decode($row['topics'], true);
+        if (!$row) {
+            return null;
+        }
+
+        $all = json_decode($row['topics'], true);
         $used = json_decode($row['used_topics'], true);
 
-        $remaining = array_diff($all, $used);
+        if (!is_array($all)) {
+            $all = [];
+        }
+
+        if (!is_array($used)) {
+            $used = [];
+        }
+
+        $remaining = array_values(array_diff($all, $used));
+
         if (empty($remaining)) {
             $used = [];
             $remaining = $all;
         }
+
         $next = array_shift($remaining);
+
+        if ($next === null) {
+            return null;
+        }
+
         $used[] = $next;
 
         $wpdb->update(
             self::$table,
             ['used_topics' => wp_json_encode(array_values($used))],
             ['strategy_id' => $strategyId],
-            ['%s'], ['%d']
+            ['%s'],
+            ['%d']
         );
 
         return $next;
